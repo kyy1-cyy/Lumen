@@ -823,6 +823,11 @@ def run_watcher():
     seen_m_q = state.setdefault("seen_movie_qualities", {})
     seen_t_q = state.setdefault("seen_tv_qualities", {})
     delayed = state.setdefault("delayed", {})
+    recent_upgrades = {
+        str(k): int(v) for k, v in (state.get("recent_upgrades") or {}).items()
+        if now - int(v) <= 3 * 86400
+    }
+    state["recent_upgrades"] = recent_upgrades
     failed_until = {
         k: int(v) for k, v in (state.get("failed_until") or {}).items()
         if int(v) > now
@@ -859,6 +864,7 @@ def run_watcher():
 
         if was_bad:
             print(f"QUALITY UPGRADE detected: {title} ({tmdb}) {prev_q} -> {q_head or 'GOOD'}")
+            recent_upgrades[key] = now
             failed_until.pop(f"vidspark:m/{tmdb}", None)
             if tmdb not in done_movies["vidspark"]:
                 immediate_jobs.append(("vidspark", tmdb, 0, 0, title))
