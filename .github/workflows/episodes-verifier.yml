@@ -2,7 +2,7 @@ name: Lumen Episodes Catalog Verifier
 
 on:
   schedule:
-    - cron: '15 */4 * * *'
+    - cron: '15 */2 * * *'
   workflow_dispatch:
 
 concurrency:
