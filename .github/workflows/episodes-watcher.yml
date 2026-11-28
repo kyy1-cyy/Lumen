@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: lumen-episodes-watcher
+  group: lumen-episodes-json
   cancel-in-progress: false
 
 jobs:
