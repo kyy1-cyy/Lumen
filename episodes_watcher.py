@@ -161,7 +161,8 @@ def run_episodes_watcher():
     cutoff_str = (now_dt - timedelta(days=RECENT_AIR_DAYS)).strftime("%Y-%m-%d")
 
     prev_doc = watcher.rclone_cat_json(EPISODES_REMOTE) or {}
-    prev_airing = prev_doc.get("airing") or {}
+    next_airing = dict(prev_doc.get("airing") or {})
+    catalog = dict(prev_doc.get("catalog") or {})
 
     r2_confirmed = set()
     for srv in watcher.SERVERS:
@@ -192,7 +193,6 @@ def run_episodes_watcher():
     except Exception:
         tor_sess = None
 
-    next_airing = {}
     probes_used = 0
     newly_confirmed = 0
 
@@ -202,15 +202,18 @@ def run_episodes_watcher():
         season = show["season"]
         aired = show["aired"]
 
-        prev_entry = prev_airing.get(skey) or {}
+        prev_entry = next_airing.get(skey) or {}
         prev_eps = set()
         if int(prev_entry.get("season") or 0) == season:
             prev_eps = {int(e) for e in (prev_entry.get("episodes") or []) if int(e) > 0}
 
+        cat_seasons = dict(catalog.get(skey) or {})
+        cat_season_eps = {int(e) for e in (cat_seasons.get(str(season)) or []) if int(e) > 0}
+
         confirmed = set()
         to_probe = []
         for ep in aired:
-            if ep in prev_eps or (tid, season, ep) in r2_confirmed:
+            if ep in prev_eps or ep in cat_season_eps or (tid, season, ep) in r2_confirmed:
                 confirmed.add(ep)
             else:
                 to_probe.append(ep)
@@ -227,14 +230,18 @@ def run_episodes_watcher():
             else:
                 print(f"NOT YET   {show['title']} ({tid}) S{season}E{ep}")
 
+        sorted_eps = sorted(confirmed)
         next_airing[skey] = {
             "season": season,
-            "episodes": sorted(confirmed),
+            "episodes": sorted_eps,
         }
+        cat_seasons[str(season)] = sorted_eps
+        catalog[skey] = cat_seasons
 
     out_doc = {
         "updated_at": int(time.time()),
         "airing": next_airing,
+        "catalog": catalog,
     }
     tmp_root = tempfile.mkdtemp(prefix="lumen_ep_")
     try:
@@ -244,7 +251,8 @@ def run_episodes_watcher():
         ok = watcher.rclone_upload_file(out_path, EPISODES_REMOTE)
         print(
             f"Done in {time.time() - t0:.1f}s: airing_shows={len(next_airing)} "
-            f"probes={probes_used} newly_confirmed={newly_confirmed} uploaded={ok}"
+            f"catalog_shows={len(catalog)} probes={probes_used} "
+            f"newly_confirmed={newly_confirmed} uploaded={ok}"
         )
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
