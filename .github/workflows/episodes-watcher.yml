@@ -1,0 +1,48 @@
+name: Lumen Airing Episodes Watcher
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: lumen-episodes-watcher
+  cancel-in-progress: false
+
+jobs:
+  watch-episodes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rclone tor
+          sudo systemctl start tor
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure rclone
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          mkdir -p ~/.config/rclone
+          printf '%s\n' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
+
+      - name: Run airing episodes watcher
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          VIDSPARK_PLAYER_KEY: ${{ secrets.VIDSPARK_PLAYER_KEY }}
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
+        run: python3 -u episodes_watcher.py
